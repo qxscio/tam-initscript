@@ -1,0 +1,114 @@
+#!/bin/bash
+# Author: ruggero DOT marchei AT daemonzone DOT net
+# Version: 1.00
+#
+# chkconfig: - 25 75
+# description:  start/stop IBM Tivoli Access Manager policy server 
+
+# Source function library.
+. /etc/init.d/functions
+
+DELAY=3
+
+RETVAL=0
+prog="pdmgrd"
+
+# Check if any of $pid (could be plural) are running
+checkpid() {
+        local i
+
+        for i in $* ; do
+                [ -d "/proc/$i" ] && return 0
+        done
+        return 1
+}
+
+find_pid() {
+    PID=$(ps -C ${prog} -o pid=)
+    if [ "X$PID" = "X" ]; then
+       PID="UNAVAILABLE"
+    fi
+
+}
+
+
+start() {
+    LOGFILE=$(mktemp)
+    echo -n $"Starting IBM Tivoli Access Manager policy server [${prog}]"
+    find_pid
+    if checkpid $PID; then
+        # service is already running
+        RETVAL=0
+    else
+        daemon "\
+        ${prog}" >${LOGFILE} 2>&1 && success || failure
+        RETVAL=$?
+    fi
+    [[ ${RETVAL} -ne 0 ]] && cat ${LOGFILE}
+    rm -f ${LOGFILE}
+echo ""
+
+}
+
+status() {
+    find_pid
+    if [ "$PID" = "UNAVAILABLE" ]; then
+        RETVAL=1
+    else
+        RETVAL=0
+    fi
+
+}
+
+
+stop() {
+    LOGFILE=$(mktemp)
+    echo -n $"Stopping IBM Tivoli Access Manager policy server [${prog}]"
+    find_pid
+    if checkpid $PID; then
+        kill -TERM $PID >>${LOGFILE} 2>&1 
+        usleep 100000
+        if checkpid $PID && sleep 2 &&
+            checkpid $PID && sleep $DELAY &&
+            checkpid $PID ; then
+            kill -KILL $PID >>${LOGFILE} 2>&1
+            usleep 100000
+        fi
+    fi
+    checkpid $PID
+    RETVAL=$?
+    RC=1
+    [ ${RETVAL} -eq 0 ] && cat ${LOGFILE} && RETVAL=1 && failure || { success && RETVAL=0; }
+    rm -f ${LOGFILE}
+    echo ""
+}
+
+case "$1" in
+ start)
+	start
+        ;;
+ stop)
+        stop 
+        ;;
+
+ status)
+        status
+        if [ $RETVAL -gt 0 ]; then
+             echo "IBM Tivoli Access Manager policy server [${prog}] is not running"
+        else
+             echo "IBM Tivoli Access Manager policy server [${prog}] is running [PID: $PID]"
+        fi
+        ;;
+
+ restart)
+	stop
+        sleep 3
+	start
+        ;;
+ *)
+    echo $"Usage: $0 {start|stop|restart|status}"
+    RETVAL=1
+    ;;
+esac
+
+exit $RETVAL
